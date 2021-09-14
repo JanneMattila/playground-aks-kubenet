@@ -88,7 +88,18 @@ helm install nginx-ingress ingress-nginx/ingress-nginx \
 
 kubectl get services nginx-ingress-ingress-nginx-controller -o wide -n ingress-demo
 kubectl describe services nginx-ingress-ingress-nginx-controller -n ingress-demo
-# -> External IP: 10.2.0.123
+# It should show -> External IP: 10.2.0.123
+#
+# IMPORTANT: If you provided IP address to "controller.service.loadBalancerIP",
+# which is not inside allowed IP range (example IP that fails: 10.0.0.123) then you will get
+# following error message from command:
+kubectl describe services nginx-ingress-ingress-nginx-controller -n ingress-demo
+# ->
+ #"error": {
+#    "code": "PrivateIPAddressNotInSubnet",
+#    "message": "Private static IP address 10.0.0.123 does not belong to the range of subnet prefix 10.2.0.0/24.",
+#    "details": []
+#  }
 
 # To remove helm:
 # helm uninstall nginx-ingress --namespace $ingressNamespace
