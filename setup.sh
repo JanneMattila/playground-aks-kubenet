@@ -129,3 +129,7 @@ curl 10.2.0.123
 # Setup DNS
 curl thingy.xyz
 # -> <html><body>Hello there!</body></html>
+
+#------------------------------------------------------------------------------
+# Wipe out the resources
+az group delete --name $resourceGroupName -y
