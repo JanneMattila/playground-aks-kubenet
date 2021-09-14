@@ -68,12 +68,53 @@ kubectl apply -f namespace.yaml
 kubectl apply -f deployment.yaml
 kubectl apply -f service.yaml
 
+kubectl get service -n demos
+
 #------------------------------------------------------------------------------
 
-ingressNamespace=ingress-demo
+ingressNamespace="ingress-demo"
 curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | sudo bash
 
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 
-helm install ingress-nginx ingress-nginx/ingress-nginx --create-namespace --namespace $ingressNamespace
+helm install nginx-ingress ingress-nginx/ingress-nginx \
+    --create-namespace --namespace $ingressNamespace \
+    --set controller.replicaCount=2 \
+    --set controller.nodeSelector."kubernetes\.io/os"=linux \
+    --set controller.admissionWebhooks.patch.nodeSelector."kubernetes\.io/os"=linux \
+    --set controller.service.loadBalancerIP=10.2.0.123 \
+    --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-internal"="true"
+
+kubectl get services nginx-ingress-ingress-nginx-controller -o wide -n ingress-demo
+kubectl describe services nginx-ingress-ingress-nginx-controller -n ingress-demo
+# -> External IP: 10.2.0.123
+
+# To remove helm:
+# helm uninstall nginx-ingress --namespace $ingressNamespace
+
+kubectl apply -f ingress.yaml
+
+#------------------------------------------------------------------------------
+
+kubectl get endpoints -n demos
+kubectl get service -n demos
+kubectl get ingress -n demos
+kubectl describe ingress demos-ingress -n demos
+# Default backend:  default-http-backend:80 (<error: endpoints "default-http-backend" not found>)
+
+# kubectl get service -n demos
+# NAME                         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+# webapp-network-tester-demo   LoadBalancer   10.0.97.103   10.2.0.6      80:32288/TCP   19m
+curl 10.2.0.6
+# -> <html><body>Hello there!</body></html>
+
+# kubectl get ingress -n demos
+# NAME            CLASS    HOSTS        ADDRESS      PORTS   AGE
+# demos-ingress   <none>   thingy.xyz   10.2.0.123   80      2m20s
+curl 10.2.0.123
+# -> 404 (Default backend:  default-http-backend:80 (<error: endpoints "default-http-backend" not found>))
+
+# Setup DNS
+curl thingy.xyz
+# -> <html><body>Hello there!</body></html>
