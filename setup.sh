@@ -63,3 +63,17 @@ sudo az aks install-cli
 az aks get-credentials -n $aksName -g $resourceGroupName
 
 kubectl get nodes
+
+kubectl apply -f namespace.yaml
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+
+#------------------------------------------------------------------------------
+
+ingressNamespace=ingress-demo
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | sudo bash
+
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install ingress-nginx ingress-nginx/ingress-nginx --create-namespace --namespace $ingressNamespace
