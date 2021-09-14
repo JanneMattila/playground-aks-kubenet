@@ -7,6 +7,8 @@ aadAdminGroupContains="janne''s"
 aksName="myaks"
 acrName="myacr0000010"
 workspaceName="myworkspace"
+vnetName="myaks-vnet"
+identityName="myaks"
 resourceGroupName="rg-myaks"
 location="northeurope"
 
@@ -26,6 +28,15 @@ echo $aadAdmingGroup
 workspaceid=$(az monitor log-analytics workspace create -g $resourceGroupName -n $workspaceName --query id -o tsv)
 echo $workspaceid
 
+subnetid=$(az network vnet create -g $resourceGroupName --name $vnetName \
+  --address-prefix 10.0.0.0/8 \
+  --subnet-name AksSubnet --subnet-prefix 10.2.0.0/24 \
+  --query newVNet.subnets[0].id -o tsv)
+echo $subnetid
+
+identityid=$(az identity create --name $identityName --resource-group $resourceGroupName --query id -o tsv)
+echo $identityid
+
 az aks get-versions -l $location -o table
 
 az aks create -g $resourceGroupName -n $aksName \
@@ -40,7 +51,12 @@ az aks create -g $resourceGroupName -n $aksName \
  --enable-managed-identity \
  --aad-admin-group-object-ids $aadAdmingGroup \
  --workspace-resource-id $workspaceid \
- --attach-acr $acrid -o table 
+ --attach-acr $acrid \
+ --enable-private-cluster \
+ --private-dns-zone System \
+ --vnet-subnet-id $subnetid \
+ --assign-identity $identityid \
+ -o table 
 
 sudo az aks install-cli
 
