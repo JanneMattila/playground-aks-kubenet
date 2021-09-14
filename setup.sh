@@ -101,7 +101,7 @@ kubectl describe services nginx-ingress-ingress-nginx-controller -n ingress-demo
 #    "details": []
 #  }
 
-# To remove helm:
+# To remove installation:
 # helm uninstall nginx-ingress --namespace $ingressNamespace
 
 kubectl apply -f ingress.yaml
