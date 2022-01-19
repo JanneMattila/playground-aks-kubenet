@@ -1,3 +1,3 @@
-# playground-aks-kubenet
+# Playground Private AKS
 
-Playground for AKS and Kubenet
+Playground for Private AKS
