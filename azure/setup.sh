@@ -34,7 +34,16 @@ az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/P
 az provider register --namespace Microsoft.ContainerService
 
 # Remove extension in case conflicting previews
-az extension remove --name aks-preview
+# az extension remove --name aks-preview
+
+#############################
+#  ____  _             _
+# / ___|| |_ __ _ _ __| |_
+# \___ \| __/ _` | '__| __|
+#  ___) | || (_| | |  | |_
+# |____/ \__\__,_|_|   \__|
+# deployment
+#############################
 
 az group create -l $location -n $resourceGroupName -o table
 
@@ -77,7 +86,8 @@ vmid=$(az vm create \
   --size Standard_DS2_v2 \
   --subnet $subnetmanagementid \
   --admin-username $username \
-  --admin-password $password)
+  --admin-password $password \
+  --query id -o tsv)
 
 identityid=$(az identity create --name $identityName --resource-group $resourceGroupName --query id -o tsv)
 echo $identityid
@@ -104,7 +114,7 @@ az aks create -g $resourceGroupName -n $aksName \
  -o table
 
 ###################
-#          _
+#          _ 
 #  ___ ___| |__
 # / __/ __| '_ \
 # \__ \__ \ | | |
@@ -113,9 +123,10 @@ az aks create -g $resourceGroupName -n $aksName \
 ###################
 # Connect to a VM using Bastion and the native client on your Windows computer (Preview)
 # https://docs.microsoft.com/en-us/azure/bastion/connect-native-client-windows
+
 az extension add --upgrade --yes --name ssh
+echo $password
 az network bastion ssh --name $bastionName --resource-group $resourceGroupName --target-resource-id $vmid --auth-type "password" --username $username
-$password
 
 aksName="myaksprivate"
 resourceGroupName="rg-myaksprivate"
@@ -123,7 +134,7 @@ resourceGroupName="rg-myaksprivate"
 # Install Azure CLI
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 # Install kubectl
-az aks install-cli
+sudo az aks install-cli
 
 # Login to Azure (inside jumpbox)
 az login -o none
@@ -133,13 +144,22 @@ kubectl get nodes
 kubectl get nodes -o wide
 
 # Create namespace
-kubectl apply -f namespace.yaml
-kubectl apply -f demos
+kubectl apply -f https://raw.githubusercontent.com/JanneMattila/playground-private-aks/main/namespace.yaml
+kubectl apply -f https://raw.githubusercontent.com/JanneMattila/playground-private-aks/main/deployment.yaml
 
 kubectl get deployment -n demos
 kubectl describe deployment -n demos
 
 kubectl get pod -n demos
+
+pod1=$(kubectl get pod -n demos -o name | head -n 1)
+echo $pod1
+
+pod1_ip=$(kubectl get pod -n demos -o jsonpath="{.items[0].status.podIP}")
+echo $pod1_ip
+
+# Test networking app
+curl -X POST --data  "IPLOOKUP bing.com" -H "Content-Type: text/plain" "$pod1_ip/api/commands"
 
 # Exit jumpbox
 exit
