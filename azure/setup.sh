@@ -16,7 +16,7 @@ bastionPublicIP="pip-bastion"
 bastionName="bas-management"
 identityName="myaksprivate"
 resourceGroupName="rg-myaksprivate"
-location="westeurope"
+location="swedencentral"
 
 username="azureuser"
 password=$(openssl rand -base64 32)
@@ -66,7 +66,7 @@ echo $subnetbastionid
 
 # Create Bastion
 az network public-ip create --resource-group $resourceGroupName --name $bastionPublicIP --sku Standard --location $location
-bastionid=$(az network bastion create --name $bastionName --public-ip-address $bastionPublicIP --resource-group $resourceGroupName --vnet-name $vnetName --location $location)
+bastionid=$(az network bastion create --name $bastionName --public-ip-address $bastionPublicIP --resource-group $resourceGroupName --vnet-name $vnetName --location $location --query id -o tsv)
 az resource update --ids $bastionid --set properties.enableTunneling=true
 
 # Create jumpbox VM
