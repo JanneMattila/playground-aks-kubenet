@@ -1,4 +1,5 @@
-#!/bin/bash
+# Enable auto export
+set -a
 
 cd azure
 
@@ -12,11 +13,12 @@ vnetName="myaksprivate-vnet"
 subnetAks="snet-aks"
 subnetManagement="snet-management"
 subnetBastion="AzureBastionSubnet"
+subnetAksAPIServer="snet-aks-apiserver"
 bastionPublicIP="pip-bastion"
 bastionName="bas-management"
 identityName="myaksprivate"
 resourceGroupName="rg-myaksprivate"
-location="swedencentral"
+location="westcentralus"
 
 username="azureuser"
 password=$(openssl rand -base64 32)
@@ -29,7 +31,9 @@ az account set --subscription $subscriptionName -o table
 az extension add --upgrade --yes --name aks-preview
 
 # Enable feature
+az feature register --namespace "Microsoft.ContainerService" --name "EnableAPIServerVnetIntegrationPreview"
 az feature register --namespace "Microsoft.ContainerService" --name "PodSubnetPreview"
+az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/EnableAPIServerVnetIntegrationPreview')].{Name:name,State:properties.state}"
 az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/PodSubnetPreview')].{Name:name,State:properties.state}"
 az provider register --namespace Microsoft.ContainerService
 
@@ -47,7 +51,7 @@ az provider register --namespace Microsoft.ContainerService
 
 az group create -l $location -n $resourceGroupName -o table
 
-aadAdmingGroup=$(az ad group list --display-name $aadAdminGroupContains --query [].objectId -o tsv)
+aadAdmingGroup=$(az ad group list --display-name $aadAdminGroupContains --query [].id -o tsv)
 echo $aadAdmingGroup
 
 workspaceid=$(az monitor log-analytics workspace create -g $resourceGroupName -n $workspaceName --query id -o tsv)
@@ -73,6 +77,14 @@ subnetbastionid=$(az network vnet subnet create -g $resourceGroupName --vnet-nam
   --query id -o tsv)
 echo $subnetbastionid
 
+# Delegate a subnet to AKS API Server
+# https://docs.microsoft.com/en-us/azure/aks/api-server-vnet-integration
+subnetaksapiserverid=$(az network vnet subnet create -g $resourceGroupName --vnet-name $vnetName \
+  --name $subnetAksAPIServer --address-prefixes 10.5.0.0/24 \
+  --delegations "Microsoft.ContainerService/managedClusters" \
+  --query id -o tsv)
+echo $subnetaksapiserverid
+
 # Create Bastion
 az network public-ip create --resource-group $resourceGroupName --name $bastionPublicIP --sku Standard --location $location
 bastionid=$(az network bastion create --name $bastionName --public-ip-address $bastionPublicIP --resource-group $resourceGroupName --vnet-name $vnetName --location $location --query id -o tsv)
@@ -89,17 +101,38 @@ vmid=$(az vm create \
   --admin-password $password \
   --query id -o tsv)
 
-identityid=$(az identity create --name $identityName --resource-group $resourceGroupName --query id -o tsv)
+identityjson=$(az identity create --name $identityName --resource-group $resourceGroupName -o json)
+identityid=$(echo $identityjson | jq -r .id)
+identityobjectid=$(echo $identityjson | jq -r .principalId)
 echo $identityid
+echo $identityobjectid
+
+# Assign Network Contributor to the API server subnet
+az role assignment create --scope $subnetaksapiserverid \
+  --role "Network Contributor" \
+  --assignee $identityobjectid
+
+# Assign Network Contributor to the cluster subnet
+az role assignment create --scope $subnetaksid \
+  --role "Network Contributor" \
+  --assignee $identityobjectid
 
 az aks get-versions -l $location -o table
+
+#
+# To use VNET Integration
+# https://docs.microsoft.com/en-us/azure/aks/api-server-vnet-integration
+# Add these:
+# --enable-apiserver-vnet-integration \
+# --apiserver-subnet-id $subnetaksapiserverid \
+#
 
 az aks create -g $resourceGroupName -n $aksName \
  --max-pods 50 --network-plugin azure \
  --node-count 1 --enable-cluster-autoscaler --min-count 1 --max-count 2 \
  --node-osdisk-type Ephemeral \
  --node-vm-size Standard_D8ds_v4 \
- --kubernetes-version 1.22.6 \
+ --kubernetes-version 1.23.5 \
  --enable-addons monitoring,azure-policy,azure-keyvault-secrets-provider \
  --enable-aad \
  --enable-managed-identity \
@@ -130,6 +163,7 @@ az network bastion ssh --name $bastionName --resource-group $resourceGroupName -
 
 aksName="myaksprivate"
 resourceGroupName="rg-myaksprivate"
+subscriptionName="AzureDev"
 
 # Install Azure CLI
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
@@ -138,7 +172,9 @@ sudo az aks install-cli
 
 # Login to Azure (inside jumpbox)
 az login -o none
+az account set --subscription $subscriptionName -o table
 az aks get-credentials -n $aksName -g $resourceGroupName --overwrite-existing
+kubelogin convert-kubeconfig -l azurecli
 
 kubectl get nodes
 kubectl get nodes -o wide
